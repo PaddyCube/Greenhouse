@@ -15,7 +15,8 @@ enum relais
     HEATER,
     FAN,
     WATER,
-    OTHERS
+    OTHERS,
+    LIGHT
 };
 
 enum error_states

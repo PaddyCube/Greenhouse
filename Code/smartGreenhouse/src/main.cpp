@@ -25,7 +25,7 @@ WiFiManagerParameter custom_mqtt_api("mqttapiID", "MQTT API Token", greenhouse.s
 IntParameter custom_window_pos("windowPosID", "Num of window positions", greenhouse.settings.max_window_positions);
 IntParameter custom_window_min("windowMinTempID", "close window im temp below °C", greenhouse.settings.window_min_temp);
 IntParameter custom_window_max("windowMaxTempID", "fully open window if temp above °C", greenhouse.settings.window_max_temp);
-IntParameter custom_window_steptime("windowStepTimeID", "time(ms)  position", greenhouse.settings.window_step_time);
+IntParameter custom_window_steptime("windowStepTimeID", "time(s)  position", greenhouse.settings.window_step_time);
 IntParameter custom_heater_min("heaterMinID", "turn heater on, if temp below °C", greenhouse.settings.heater_min_temp);
 IntParameter custom_heater_max("heaterMaxID", "turn heater off, if temp below °C", greenhouse.settings.heater_max_temp);
 IntParameter custom_fan("fanID", "turn on fan, if humidity above %", greenhouse.settings.fan_min_humidity);

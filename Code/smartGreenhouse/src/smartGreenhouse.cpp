@@ -25,6 +25,8 @@ SmartGreenhouse::SmartGreenhouse()
         window_open[i] = false;
         window_closed[i] = false;
         window_position[i] = -1;
+        window_last_target_position[i] = -1;
+        window_target_position[i] = -1;
         // time_window_move_start[i] = 0;
     }
 
@@ -42,8 +44,8 @@ SmartGreenhouse::SmartGreenhouse()
     pinMode(pin_motor2_current, INPUT); // motor 2 current sense
 
     // voltage measurement
-    pinMode(pin_vcc_solar, INPUT);
-    pinMode(pin_vcc_battery, INPUT);
+   // pinMode(pin_vcc_solar, INPUT);
+   // pinMode(pin_vcc_battery, INPUT);
 
     // light and switch
     pinMode(pin_light_switch, INPUT_PULLUP); // switch for user input
@@ -125,7 +127,7 @@ void SmartGreenhouse::loop()
     // check water
     if (USE_WATER_PUMP && operation_state == AUTO)
     {
-        if (now - time_water_pump > settings.water_pump_timeout && water_pump_enable)
+        if (now - time_water_pump > settings.water_pump_timeout *1000 && water_pump_enable)
         {
             toggleRelais(WATER, false);
         }
@@ -135,6 +137,15 @@ void SmartGreenhouse::loop()
     if (USE_OTHERS && operation_state == AUTO)
     {
     }
+
+    // check light
+    if (USE_LIGHT && operation_state == AUTO)
+    {
+        if (now - time_light > settings.max_light_on *1000 && light_enable)
+        {
+            toggleRelais(LIGHT, false);
+        }
+    }    
 
     // operate motors
     controlMotor();
@@ -202,7 +213,7 @@ void SmartGreenhouse::sendMqttData()
         window["max_temp"] = settings.window_max_temp;
         window["step_time"] = settings.window_step_time;
         window["closed"] = window_closed[i];
-        window["max_opened"] = window_open[i];   
+        window["max_opened"] = window_open[i];
     }
     JsonArray doors = json.createNestedArray("doors");
     for (int i = 0; i < NUM_OF_DOORS; i++)
@@ -304,7 +315,7 @@ void SmartGreenhouse::moveWindow(int window, int position)
             {
                 Serial.println("Start moving windows");
                 // time_window_move_start[window] = millis(); // to check for timeouts
-                int duration = (window_target_position[window] - window_position[window]) * settings.window_step_time;
+                int duration = (window_target_position[window] - window_position[window]) * settings.window_step_time * 1000;
                 if (duration <= 0)
                 {
                     motors->runMotorFor(window, backward, abs(duration));
@@ -337,8 +348,16 @@ void SmartGreenhouse::getSensorData()
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::getDoorState()
 {
-    door_open = digitalRead(pin_door_open);
-    door_closed = digitalRead(pin_door_closed);
+    if (DOOR_ENDSTOP_NC)
+    {
+        door_open = digitalRead(pin_door_open);
+        door_closed = digitalRead(pin_door_closed);
+    }
+    else
+    {
+        door_open = !digitalRead(pin_door_open);
+        door_closed = !digitalRead(pin_door_closed);
+    }
 
     // check for errors
     if (door_open == true && door_closed == true)
@@ -352,8 +371,16 @@ void SmartGreenhouse::getWindowState()
 {
     if (NUM_OF_WINDOWS > 0)
     {
-        window_open[0] = digitalRead(pin_window1_open);
-        window_closed[0] = digitalRead(pin_window1_closed);
+        if (WINDOW_ENDSTOPS_NC)
+        {
+            window_open[0] = digitalRead(pin_window1_open);
+            window_closed[0] = digitalRead(pin_window1_closed);
+        }
+        else
+        {
+            window_open[0] = !digitalRead(pin_window1_open);
+            window_closed[0] = !digitalRead(pin_window1_closed);
+        }
 
         if (window_open[0] == true && window_closed[0] == true)
         {
@@ -391,6 +418,7 @@ void SmartGreenhouse::getVoltage()
         // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
         float calib_factor = 5.6; // 5.28; // change this value to calibrate the  voltage
         unsigned long raw = analogRead(pin_vcc_solar);
+                Serial.println(raw);
         solarVoltage = raw * calib_factor / 1024;
     }
 
@@ -399,6 +427,7 @@ void SmartGreenhouse::getVoltage()
         // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
         float calib_factor = 5.6; // 5.28; // change this value to calibrate the  voltage
         unsigned long raw = analogRead(pin_vcc_battery);
+
         batVoltage = raw * calib_factor / 1024;
     }
 }
@@ -465,6 +494,21 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
             }
         }
         break;
+    case LIGHT:
+        if (USE_LIGHT)
+        {
+            light_enable = on;
+            if (on)
+            {
+                digitalWrite(pin_light_load, HIGH);
+                time_light = millis();
+            }
+            else
+            {
+                digitalWrite(pin_light_load, LOW);
+            }
+        }
+        break;
     }
 }
 
@@ -483,7 +527,7 @@ void SmartGreenhouse::controlMotor()
 
             // check motor endstop closed position
             // when we close window, stop at endstop in any case
-            if (window_target_position[i] < window_position[i])
+            if (window_target_position[i] <= window_position[i] || window_position[i] == -1 || window_target_position[i] == 0)
             {
                 if (window_closed[i])
                 {
@@ -513,8 +557,15 @@ void SmartGreenhouse::controlMotor()
                     Serial.println("window target pos reached");
                 }
             }
+
+            // when target position equals 0 but no endpoint has been reached, continue running
+            if (window_target_position[i] == 0 && window_closed[i] == false && !motors->motor_enable[i])
+            {
+                motors->runMotor(i, backward);
+            }
         }
     }
+    motors->loop();
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::mqtt_callback(char *topic, byte *payload, unsigned int length)
@@ -590,9 +641,17 @@ void SmartGreenhouse::mqtt_callback(char *topic, byte *payload, unsigned int len
         {
             toggleRelais(FAN, turn_on);
         }
+        if (parameter == "WATER")
+        {
+            toggleRelais(WATER, turn_on);
+        }
         if (parameter == "OTHERS")
         {
             toggleRelais(OTHERS, turn_on);
+        }
+        if (parameter == "LIGHT")
+        {
+            toggleRelais(LIGHT, turn_on);
         }
     }
 }

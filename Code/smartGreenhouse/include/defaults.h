@@ -12,7 +12,7 @@ struct config
     int max_window_positions = 6; // how many steps/stops should be used between fully closed and fully openend window?
     int window_min_temp = 18;     // if temperature is below this value, windows will be closed in any case (°C)
     int window_max_temp = 26;     // if temperature is above this value, windows will be opnened fully (°C)
-    int window_step_time = 1000; // run time to reach next window position
+    int window_step_time = 1000; // run time (seconds) to reach next window position
 
     /*----- Light and Switch-----*/
     int max_light_on = 300; // define timeout (seconds) of lights. Will be turned off after reached

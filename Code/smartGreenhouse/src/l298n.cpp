@@ -73,6 +73,8 @@ bool L298N::runMotorFor(int motor, direction direction, int duration)
     {
         _motor_starttime[motor] = millis();
         _motor_runtime[motor] = duration;
+        Serial.print("run motor for ");
+        Serial.println(duration);
         return true;
     }
     else
