@@ -2,6 +2,7 @@
 #include <PubSubClient.h>
 #include <Adafruit_BME280.h>
 #include <string.h>
+#include <Wire.h>
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
 #define ARDUINOJSON_ENABLE_STD_STRING 1
@@ -31,10 +32,10 @@ SmartGreenhouse::SmartGreenhouse()
     }
 
     // set IO pins
-    pinMode(pin_window1_closed, INPUT); // add up/pulldown resistors externally
-    pinMode(pin_window1_open, INPUT);   // add up/pulldown resistors externally
-    pinMode(pin_window2_closed, INPUT); // add up/pulldown resistors externally
-    pinMode(pin_window2_open, INPUT);   // add up/pulldown resistors externally
+    pinMode(pin_window1_closed, INPUT_PULLUP);
+    pinMode(pin_window1_open, INPUT_PULLUP);
+    pinMode(pin_window2_closed, INPUT_PULLUP);
+    pinMode(pin_window2_open, INPUT_PULLUP);
     pinMode(pin_door_open, INPUT_PULLUP);
     pinMode(pin_door_closed, INPUT_PULLUP);
 
@@ -44,8 +45,8 @@ SmartGreenhouse::SmartGreenhouse()
     pinMode(pin_motor2_current, INPUT); // motor 2 current sense
 
     // voltage measurement
-   // pinMode(pin_vcc_solar, INPUT);
-   // pinMode(pin_vcc_battery, INPUT);
+    pinMode(pin_vcc_solar, INPUT);
+    pinMode(pin_vcc_battery, INPUT);
 
     // light and switch
     pinMode(pin_light_switch, INPUT_PULLUP); // switch for user input
@@ -56,6 +57,16 @@ SmartGreenhouse::SmartGreenhouse()
     pinMode(pin_relais2, OUTPUT); // fan
     pinMode(pin_relais3, OUTPUT); // water pump
     pinMode(pin_relais4, OUTPUT);
+
+    // turn all off
+    toggleRelais(HEATER, false);
+    toggleRelais(FAN, false);
+    toggleRelais(WATER, false);
+    toggleRelais(OTHERS, false);
+
+
+    // initialize BME
+
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::loop()
@@ -127,7 +138,7 @@ void SmartGreenhouse::loop()
     // check water
     if (USE_WATER_PUMP && operation_state == AUTO)
     {
-        if (now - time_water_pump > settings.water_pump_timeout *1000 && water_pump_enable)
+        if (now - time_water_pump > settings.water_pump_timeout * 1000 && water_pump_enable)
         {
             toggleRelais(WATER, false);
         }
@@ -141,11 +152,11 @@ void SmartGreenhouse::loop()
     // check light
     if (USE_LIGHT && operation_state == AUTO)
     {
-        if (now - time_light > settings.max_light_on *1000 && light_enable)
+        if (now - time_light > settings.max_light_on * 1000 && light_enable)
         {
             toggleRelais(LIGHT, false);
         }
-    }    
+    }
 
     // operate motors
     controlMotor();
@@ -343,6 +354,8 @@ void SmartGreenhouse::getSensorData()
     getVoltage();
     checkButton();
     // get BME data
+    temperature = bme.readTemperature();
+    humidity = bme.readHumidity();
 }
 
 /*--------------------------------------------------------------*/
@@ -415,19 +428,17 @@ void SmartGreenhouse::getVoltage()
 {
     if (SOLAR_POWERED)
     {
-        // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
-        float calib_factor = 5.6; // 5.28; // change this value to calibrate the  voltage
+        // Voltage divider R1 = 10k and R2=1k
+        float calib_factor = 11; // (R1 + R1) / R2
         unsigned long raw = analogRead(pin_vcc_solar);
-                Serial.println(raw);
         solarVoltage = raw * calib_factor / 1024;
     }
 
     if (BATTERY_MONITOR)
     {
-        // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
-        float calib_factor = 5.6; // 5.28; // change this value to calibrate the  voltage
+        // Voltage divider R1 10k and R2=1k
+        float calib_factor = 11; // (R1 + R1) / R2
         unsigned long raw = analogRead(pin_vcc_battery);
-
         batVoltage = raw * calib_factor / 1024;
     }
 }
@@ -442,11 +453,11 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
             heater_enable = on;
             if (on)
             {
-                digitalWrite(pin_relais1, HIGH);
+                digitalWrite(pin_relais1, LOW);
             }
             else
             {
-                digitalWrite(pin_relais1, LOW);
+                digitalWrite(pin_relais1, HIGH);
             }
         }
         break;
@@ -456,11 +467,11 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
         {
             if (on)
             {
-                digitalWrite(pin_relais2, HIGH);
+                digitalWrite(pin_relais2, LOW);
             }
             else
             {
-                digitalWrite(pin_relais2, LOW);
+                digitalWrite(pin_relais2, HIGH);
             }
         }
         break;
@@ -470,12 +481,12 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
             water_pump_enable = on;
             if (on)
             {
-                digitalWrite(pin_relais3, HIGH);
+                digitalWrite(pin_relais3, LOW);
                 time_water_pump = millis();
             }
             else
             {
-                digitalWrite(pin_relais3, LOW);
+                digitalWrite(pin_relais3, HIGH);
                 time_water_pump = 0;
             }
         }
@@ -486,11 +497,11 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
             others_enable = on;
             if (on)
             {
-                digitalWrite(pin_relais4, HIGH);
+                digitalWrite(pin_relais4, LOW);
             }
             else
             {
-                digitalWrite(pin_relais4, LOW);
+                digitalWrite(pin_relais4, HIGH);
             }
         }
         break;
@@ -676,4 +687,15 @@ void SmartGreenhouse::setOperationState(operation_states state)
         operation_state = state;
         Serial.println("set operation mode to AUTO");
     }
+}
+
+void SmartGreenhouse::initBME()
+{
+    Serial.println("init BME");
+     if (!bme.begin(0x76))
+     {
+        error_state = BME_ERROR;
+     }
+    Serial.println("init BME done");
+
 }

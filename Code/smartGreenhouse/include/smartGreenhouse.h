@@ -46,6 +46,7 @@ public:
     void setOperationState(operation_states state);
     void moveWindow(int window, int position);
     void toggleRelais(int num, bool on);
+    void initBME();
 
 private:
     void getSensorData();
@@ -77,6 +78,7 @@ private:
     // environmental sensor data
     float temperature = 0.0;
     float humidity = 0.0;
+    Adafruit_BME280 bme;
 
     // other sensor data
     bool window_open[NUM_OF_WINDOWS];

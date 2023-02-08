@@ -241,7 +241,7 @@ void setup()
     Serial.println("connected...yeey :)");
   }
   wm.startConfigPortal();
-
+  greenhouse.initBME();
 }
 
 void loop()
