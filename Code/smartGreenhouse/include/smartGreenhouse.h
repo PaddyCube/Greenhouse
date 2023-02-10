@@ -9,6 +9,8 @@
 #include <WiFi.h>
 #include "pinmapping.h"
 #include "l298n.h"
+#include <LiquidCrystal_I2C.h>
+#include <Button2.h>
 
 enum relais
 {
@@ -41,12 +43,15 @@ public:
     SmartGreenhouse();
     bool isDoorOpen();
     bool isWindowOpen(int window);
+    bool relaisStatus(int num);
     config settings;
     void loop();
     void setOperationState(operation_states state);
     void moveWindow(int window, int position);
     void toggleRelais(int num, bool on);
     void initBME();
+    void initLCD();
+    void initButton();
 
 private:
     void getSensorData();
@@ -56,12 +61,19 @@ private:
     void getVoltage();
     void sendMqttData();
     void controlMotor(); // controlling actuators in loop
+    void writeLCD();
     void mqtt_callback(char *topic, byte *payload, unsigned int length);
+   // void buttonClickHandler(Button2& b);
+   // void buttonDoubleClickHandler(Button2& b);
+   // void buttonTripleClickHandler(Button2& b);
+   // void buttonLongPressHandler(Button2& b);
 
     // mqtt handling
     WiFiClient espClient;
     PubSubClient mqtt_client;
     void mqtt_reconnect();
+    bool mqtt_trigger = false;
+    unsigned int mqttLastReconnect;
 
     // motor
     L298N *motors;
@@ -79,6 +91,14 @@ private:
     float temperature = 0.0;
     float humidity = 0.0;
     Adafruit_BME280 bme;
+
+    // LCD Display
+    LiquidCrystal_I2C *lcd;
+    int lcdWriteCounter = 0;
+    int lcdClearCounter = 100;
+
+    // Button
+  //  Button2 *button;
 
     // other sensor data
     bool window_open[NUM_OF_WINDOWS];

@@ -5,6 +5,7 @@
 #include "defaults.h"
 #include "wmIntParameter.h"
 #include "smartGreenhouse.h"
+#include "Button2.h"
 
 #ifdef ESP32
 #include <SPIFFS.h>
@@ -16,7 +17,7 @@
 // Be sure to know how to process loops with no delay() if using non blocking
 bool wm_nonblocking = true; // change to true to use non blocking
 
-WiFiManager wm; // global wm instance
+WiFiManager wm;             // global wm instance
 SmartGreenhouse greenhouse; // global Greenhouse instance
 
 WiFiManagerParameter custom_mqtt_server("mqttserverID", "MQTT Server", greenhouse.settings.mqtt_server, 40);
@@ -32,7 +33,33 @@ IntParameter custom_fan("fanID", "turn on fan, if humidity above %", greenhouse.
 IntParameter custom_water("waterID", "run water pump for (S)", greenhouse.settings.water_pump_timeout);
 IntParameter custom_light("lightiD", "Timeout for light (S)", greenhouse.settings.max_light_on);
 
+// Button
+Button2 button;
 
+/*--------------------------------------------------------------*/
+void buttonClickHandler(Button2 &b)
+{
+  greenhouse.toggleRelais(LIGHT, !greenhouse.relaisStatus(LIGHT));
+}
+
+/*--------------------------------------------------------------*/
+void buttonDoubleClickHandler(Button2 &b)
+{
+  greenhouse.toggleRelais(WATER, !greenhouse.relaisStatus(WATER));
+}
+
+/*--------------------------------------------------------------*/
+void buttonTripleClickHandler(Button2 &b)
+{
+  Serial.println("click detected");
+}
+
+/*--------------------------------------------------------------*/
+void buttonLongPressHandler(Button2 &b)
+{
+  wm.startConfigPortal();
+  //Serial.println("long click detected");
+}
 
 // callback notifying us of the need to save config
 void saveParamCallback()
@@ -242,12 +269,25 @@ void setup()
   }
   wm.startConfigPortal();
   greenhouse.initBME();
+  greenhouse.initLCD();
+
+  // Button
+  button.begin(pin_light_switch);
+  button.setDebounceTime(100);
+  button.setLongClickTime(3000);
+  button.setDoubleClickTime(600);
+
+  button.setClickHandler(buttonClickHandler);
+  button.setDoubleClickHandler(buttonDoubleClickHandler);
+  button.setTripleClickHandler(buttonTripleClickHandler);
+  button.setLongClickDetectedHandler(buttonLongPressHandler);
 }
 
 void loop()
 {
   if (wm_nonblocking)
     wm.process(); // avoid delays() in loop when non-blocking and other long running code
-  
+
   greenhouse.loop();
+  button.loop();
 }

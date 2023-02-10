@@ -16,6 +16,7 @@ SmartGreenhouse::SmartGreenhouse()
             time_motor1_on =
                 time_motor2_on = millis();
 
+    mqttLastReconnect = 999999999;
     mqtt_client.setClient(espClient);
     mqtt_client.setServer(settings.mqtt_server, settings.mqtt_port);
     mqtt_client.setBufferSize(1024);
@@ -63,10 +64,6 @@ SmartGreenhouse::SmartGreenhouse()
     toggleRelais(FAN, false);
     toggleRelais(WATER, false);
     toggleRelais(OTHERS, false);
-
-
-    // initialize BME
-
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::loop()
@@ -162,39 +159,45 @@ void SmartGreenhouse::loop()
     controlMotor();
 
     // send mqtt data
-    if (now - mqtt_last_time >= mqtt_send_interval)
+    if (now - mqtt_last_time >= mqtt_send_interval || mqtt_trigger == true)
     {
+        mqtt_trigger = false;
         mqtt_last_time = millis();
         sendMqttData();
+        writeLCD();
     }
 
     mqtt_client.loop();
+    // button->loop();
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::mqtt_reconnect()
 {
-    int reconnect_attemps = 0;
-    while (!mqtt_client.connected())
+    // don't try to reconnect continuously
+    if (millis() - mqttLastReconnect > 60  * 1000)
     {
-        reconnect_attemps++;
-        if (reconnect_attemps > 5)
+        mqttLastReconnect = millis();
+        int reconnect_attemps = 0;
+        while (!mqtt_client.connected())
         {
-            Serial.println("failed to connect to MQTT Broker");
-            return;
-        }
+            reconnect_attemps++;
+            if (reconnect_attemps > 2)
+            {
+                Serial.println("failed to connect to MQTT Broker");
+                return;
+            }
 
-        Serial.print("Reconnecting...");
-        if (!mqtt_client.connect("smartGreenhouse"))
-        {
-            Serial.print("failed, rc=");
-            Serial.print(mqtt_client.state());
-            Serial.println(" retrying in 5 seconds");
-            delay(5000);
+            Serial.print("Reconnecting...");
+            if (!mqtt_client.connect("smartGreenhouse"))
+            {
+                Serial.print("failed, rc=");
+                Serial.print(mqtt_client.state());
+            }
         }
+        Serial.println("connected to MQTT Broker");
+        Serial.print("subscribing: ");
+        Serial.println(mqtt_client.subscribe(mqtt_subscribe_topic));
     }
-    Serial.println("connected to MQTT Broker");
-    Serial.print("subscribing: ");
-    Serial.println(mqtt_client.subscribe(mqtt_subscribe_topic));
 }
 
 /*--------------------------------------------------------------*/
@@ -665,6 +668,7 @@ void SmartGreenhouse::mqtt_callback(char *topic, byte *payload, unsigned int len
             toggleRelais(LIGHT, turn_on);
         }
     }
+    mqtt_trigger = true;
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::checkButton()
@@ -688,14 +692,125 @@ void SmartGreenhouse::setOperationState(operation_states state)
         Serial.println("set operation mode to AUTO");
     }
 }
-
+/*--------------------------------------------------------------*/
 void SmartGreenhouse::initBME()
 {
     Serial.println("init BME");
-     if (!bme.begin(0x76))
-     {
+    if (!bme.begin(0x76))
+    {
         error_state = BME_ERROR;
-     }
+    }
     Serial.println("init BME done");
+}
+/*--------------------------------------------------------------*/
+void SmartGreenhouse::initLCD()
+{
+    lcd = new LiquidCrystal_I2C(0x27, 20, 4);
+    lcd->init();
+    lcd->backlight();
+    lcd->blink_off();
+}
 
+/*--------------------------------------------------------------*/
+void SmartGreenhouse::writeLCD()
+{
+    lcdWriteCounter++;
+
+    // clear display to get rid of junk output.
+    if (lcdWriteCounter > lcdClearCounter)
+    {
+        lcd->clear();
+        lcdWriteCounter = 0;
+    }
+
+    char str[10];
+
+    lcd->setCursor(0, 0);
+    sprintf(str, "T %3.2fC", temperature);
+    lcd->print(str);
+
+    lcd->setCursor(10, 0);
+    sprintf(str, "H %3.0f", humidity);
+    lcd->print(str);
+
+    lcd->setCursor(17, 0);
+    if (operation_state == MANUAL)
+    {
+        lcd->print("M");
+    }
+    else
+    {
+        lcd->print("A");
+    }
+
+    lcd->setCursor(18, 0);
+    sprintf(str, "E%i", error_state);
+    lcd->print(str);
+
+    // second row
+    if (BATTERY_MONITOR)
+    {
+        lcd->setCursor(0, 1);
+        sprintf(str, "B %2.2f V", batVoltage);
+        lcd->print(str);
+    }
+
+    if (SOLAR_POWERED)
+    {
+        lcd->setCursor(10, 1);
+        sprintf(str, "S %2.2f V", solarVoltage);
+        lcd->print(str);
+    }
+
+    if (USE_WATER_PUMP)
+    {
+        lcd->setCursor(0, 2);
+        sprintf(str, "Water  %i", water_pump_enable);
+        lcd->print(str);
+    }
+
+    if (USE_HEATER)
+    {
+        lcd->setCursor(10, 2);
+        sprintf(str, "Heater %i", heater_enable);
+        lcd->print(str);
+    }
+    if (USE_FAN)
+    {
+        lcd->setCursor(0, 3);
+        sprintf(str, "Fan    %i", fan_enable);
+        lcd->print(str);
+    }
+
+    if (USE_OTHERS)
+    {
+        lcd->setCursor(10, 3);
+        sprintf(str, "Others %i", others_enable);
+        lcd->print(str);
+    }
+}
+
+// /*--------------------------------------------------------------*/
+bool SmartGreenhouse::relaisStatus(int num)
+{
+
+    switch (num)
+    {
+    case HEATER:
+        return heater_enable;
+        break;
+
+    case WATER:
+        return water_pump_enable;
+        break;
+
+    case FAN:
+        return fan_enable;
+        break;
+
+    case OTHERS:
+        return others_enable;
+        break;
+    }
+    return false;
 }
