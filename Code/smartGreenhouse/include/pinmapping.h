@@ -6,10 +6,10 @@ DON'T CHANGE THEM IF YOU DON'T KNOW WHAT YOU DO
 
 */
 // limit switches of windows and doors
-#define pin_window1_closed 4
-#define pin_window1_open 2
-#define pin_window2_closed 15
-#define pin_window2_open 13
+#define pin_window1_closed 2
+#define pin_window1_open 4
+#define pin_window2_closed 13
+#define pin_window2_open 15
 #define pin_door_open 16
 #define pin_door_closed 17
 

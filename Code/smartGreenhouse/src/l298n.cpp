@@ -7,6 +7,7 @@ L298N::L298N(int pin_enable, int pin_mot1_in1, int pin_mot1_in2, int pin_mot2_in
     _pin_motor_in2[0] = pin_mot1_in2;
     _pin_motor_in1[1] = pin_mot2_in1;
     _pin_motor_in2[1] = pin_mot2_in2;
+    setup();
 }
 
 void L298N::setup()
@@ -16,7 +17,7 @@ void L298N::setup()
     pinMode(_pin_motor_in1[1], OUTPUT);
     pinMode(_pin_motor_in2[1], OUTPUT);
     ledcAttachPin(_pin_enable, 0); // enables motor driver
-    ledcSetup(0, 1000, 12);
+    ledcSetup(0, 30000, 8);
 }
 
 bool L298N::stop(int motor)
@@ -24,10 +25,17 @@ bool L298N::stop(int motor)
     if (motor != MOTOR1 && motor != MOTOR2)
         return false;
 
-    motor_enable[motor] = false;
-    digitalWrite(_pin_motor_in1[motor], LOW);
-    digitalWrite(_pin_motor_in2[motor], LOW);
+    if (motor_enable[motor] == true)
+    {
+        Serial.print("[MOTOR] stop motor: ");
+        Serial.println(motor);
+
+        motor_enable[motor] = false;
+        digitalWrite(_pin_motor_in1[motor], LOW);
+        digitalWrite(_pin_motor_in2[motor], LOW);
+    }
     _motor_starttime[motor] = 0;
+    _motor_runtime[motor] = 0;
     return true;
 }
 
@@ -57,7 +65,6 @@ bool L298N::runMotor(int motor, direction direction)
         break;
     }
     motor_enable[motor] = true;
-    _motor_starttime[motor] = 0;
     ledcWrite(PWM_CH, _speed);
     return true;
 }
@@ -73,7 +80,9 @@ bool L298N::runMotorFor(int motor, direction direction, int duration)
     {
         _motor_starttime[motor] = millis();
         _motor_runtime[motor] = duration;
-        Serial.print("run motor for ");
+        Serial.print("[MOTOR] run motor ");
+        Serial.print(motor);
+        Serial.print(" for ");
         Serial.println(duration);
         return true;
     }
@@ -92,8 +101,9 @@ void L298N::loop()
         {
             if (millis() - _motor_starttime[i] > _motor_runtime[i])
             { // timeout has been reached, stop the motor
-                motor_enable[i] = false;
                 stop(i);
+                Serial.print("[MOTOR] timeout reached for motor: ");
+                Serial.println(i);
             }
         }
     }

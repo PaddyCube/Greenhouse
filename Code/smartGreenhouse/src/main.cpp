@@ -58,7 +58,7 @@ void buttonTripleClickHandler(Button2 &b)
 void buttonLongPressHandler(Button2 &b)
 {
   wm.startConfigPortal();
-  //Serial.println("long click detected");
+  // Serial.println("long click detected");
 }
 
 // callback notifying us of the need to save config
@@ -225,12 +225,11 @@ void buildMenuParameters()
 
 void setup()
 {
-
-  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
   Serial.setDebugOutput(true);
-  delay(3000);
   Serial.println("\n Starting");
+  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+  delay(3000);
 
   if (wm_nonblocking)
     wm.setConfigPortalBlocking(false);
@@ -255,6 +254,7 @@ void setup()
   wm.setConfigPortalTimeout(300); // auto close configportal after n seconds
   bool res;
   // res = wm.autoConnect(); // auto generated AP name from chipid
+  wm.setConnectTimeout(30);
   res = wm.autoConnect("smartGreenhouse"); // anonymous ap
 
   if (!res)

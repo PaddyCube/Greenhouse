@@ -51,7 +51,6 @@ public:
     void toggleRelais(int num, bool on);
     void initBME();
     void initLCD();
-    void initButton();
 
 private:
     void getSensorData();
@@ -63,10 +62,9 @@ private:
     void controlMotor(); // controlling actuators in loop
     void writeLCD();
     void mqtt_callback(char *topic, byte *payload, unsigned int length);
-   // void buttonClickHandler(Button2& b);
-   // void buttonDoubleClickHandler(Button2& b);
-   // void buttonTripleClickHandler(Button2& b);
-   // void buttonLongPressHandler(Button2& b);
+    void toggleOTHERS();
+    int getMotorCurrent(int motor);
+    float getMotorCurrentZeroVoltage(int motor);
 
     // mqtt handling
     WiFiClient espClient;
@@ -77,8 +75,16 @@ private:
 
     // motor
     L298N *motors;
+    // ACS712 zero voltage, measured voltage if motors are not turning
+    float motor_current_zeroVoltage[NUM_OF_WINDOWS];
+    float motor_last_voltage[NUM_OF_WINDOWS]; // last read voltageore divider
+    unsigned int time_motor_current_zero[NUM_OF_WINDOWS];
+    unsigned int time_interval_motor_current = 500; // only once per 1/2 second
+    unsigned int time_last_motor_current[NUM_OF_WINDOWS];
+
     // error states
     int error_state = 0;
+
     // operation state
     int operation_state = 0;
 
@@ -97,9 +103,6 @@ private:
     int lcdWriteCounter = 0;
     int lcdClearCounter = 100;
 
-    // Button
-  //  Button2 *button;
-
     // other sensor data
     bool window_open[NUM_OF_WINDOWS];
     bool window_closed[NUM_OF_WINDOWS];
@@ -115,6 +118,7 @@ private:
     int window_position[NUM_OF_WINDOWS];
     int window_target_position[NUM_OF_WINDOWS];
     int window_last_target_position[NUM_OF_WINDOWS];
+    unsigned int window_last_time_new_target[NUM_OF_WINDOWS];
 
     // actuator durations
     uint32_t time_water_pump = 0;
@@ -128,6 +132,7 @@ private:
     uint32_t mqtt_last_time = 0;
     uint32_t mqtt_send_interval = MQTT_SEND_INTERVAL;
     uint32_t time_manual_state = 0;
+    uint32_t time_last_sensor_read = 0;
 
     const char *error_names[6] = {"OK", "ERR_WINDOW_ENDSTOP", "ERR_WINDOW_MOVE", "ERR_DOOR", "ERR_MOTOR_OVERLOAD", "ERR_BME"};
 };

@@ -22,16 +22,6 @@ SmartGreenhouse::SmartGreenhouse()
     mqtt_client.setBufferSize(1024);
     mqtt_client.setCallback(std::bind(&SmartGreenhouse::mqtt_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-    for (int i = 0; i < NUM_OF_WINDOWS; i++)
-    {
-        window_open[i] = false;
-        window_closed[i] = false;
-        window_position[i] = -1;
-        window_last_target_position[i] = -1;
-        window_target_position[i] = -1;
-        // time_window_move_start[i] = 0;
-    }
-
     // set IO pins
     pinMode(pin_window1_closed, INPUT_PULLUP);
     pinMode(pin_window1_open, INPUT_PULLUP);
@@ -42,6 +32,7 @@ SmartGreenhouse::SmartGreenhouse()
 
     // setup motor
     motors = new L298N(pin_motor_enable, pin_motor1_in1, pin_motor1_in2, pin_motor2_in1, pin_motor2_in2);
+    motors->setSpeed(255);
     pinMode(pin_motor1_current, INPUT); // motor 1 current sense
     pinMode(pin_motor2_current, INPUT); // motor 2 current sense
 
@@ -64,6 +55,22 @@ SmartGreenhouse::SmartGreenhouse()
     toggleRelais(FAN, false);
     toggleRelais(WATER, false);
     toggleRelais(OTHERS, false);
+
+    for (int i = 0; i < NUM_OF_WINDOWS; i++)
+    {
+        window_open[i] = false;
+        window_closed[i] = false;
+        window_position[i] = -1;
+        window_last_target_position[i] = -1;
+        window_target_position[i] = -1;
+        window_last_time_new_target[i] = 999999999;
+
+        time_motor_current_zero[i] = 99999999;
+        // get motor zero value
+        // motor_current_zeroVoltage[i] = getMotorCurrentZeroVoltage(i);
+        time_last_motor_current[i] = 999999999;
+        motor_last_voltage[i] = 0.0;
+    }
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::loop()
@@ -93,9 +100,9 @@ void SmartGreenhouse::loop()
         {
             target_position = settings.max_window_positions;
         }
-        if (temperature > settings.window_min_temp && temperature < settings.window_min_temp)
+        if (temperature > settings.window_min_temp && temperature < settings.window_max_temp)
         {
-            float steps = (settings.window_max_temp - settings.window_min_temp) / settings.max_window_positions;
+            float steps = (settings.window_max_temp - settings.window_min_temp) /  ( settings.max_window_positions +1 );
             float offset = temperature - settings.window_min_temp;
             target_position = static_cast<int>(abs(offset / steps));
         }
@@ -168,20 +175,26 @@ void SmartGreenhouse::loop()
     }
 
     mqtt_client.loop();
-    // button->loop();
+    toggleOTHERS();
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::mqtt_reconnect()
 {
+    // no reconnect when motor is turning
+    if (motors->motor_enable[0] || motors->motor_enable[1])
+    {
+        return;
+    }
+
     // don't try to reconnect continuously
-    if (millis() - mqttLastReconnect > 60  * 1000)
+    if (millis() - mqttLastReconnect > 60 * 1000)
     {
         mqttLastReconnect = millis();
         int reconnect_attemps = 0;
         while (!mqtt_client.connected())
         {
             reconnect_attemps++;
-            if (reconnect_attemps > 2)
+            if (reconnect_attemps > 5)
             {
                 Serial.println("failed to connect to MQTT Broker");
                 return;
@@ -192,6 +205,8 @@ void SmartGreenhouse::mqtt_reconnect()
             {
                 Serial.print("failed, rc=");
                 Serial.print(mqtt_client.state());
+                Serial.println(" retrying in 5 seconds");
+                delay(5000);
             }
         }
         Serial.println("connected to MQTT Broker");
@@ -318,28 +333,37 @@ bool SmartGreenhouse::isWindowOpen(int window)
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::moveWindow(int window, int position)
 {
+    unsigned int now = millis();
+
     if (window >= 0 && window < NUM_OF_WINDOWS)
     {
-        if (position >= 0 && position <= settings.max_window_positions)
+        // only set a new target, if we know the actual position
+        if (window_position[window] != -1)
         {
-            window_target_position[window] = position;
-
-            // check if we got a new target
-            if (window_last_target_position[window] != window_target_position[window])
+            if (position >= 0 && position <= settings.max_window_positions &&
+                now - window_last_time_new_target[window] > 5000) // only accept new targets if more than 5 sec done since last time
             {
-                Serial.println("Start moving windows");
-                // time_window_move_start[window] = millis(); // to check for timeouts
-                int duration = (window_target_position[window] - window_position[window]) * settings.window_step_time * 1000;
-                if (duration <= 0)
-                {
-                    motors->runMotorFor(window, backward, abs(duration));
-                }
-                else
-                {
-                    motors->runMotorFor(window, forward, abs(duration));
-                }
+                window_target_position[window] = position;
+                window_last_time_new_target[window] = now;
 
-                window_last_target_position[window] = window_target_position[window];
+                // check if we got a new target
+                if (window_last_target_position[window] != window_target_position[window])
+                {
+                    Serial.print("Start moving windows to ");
+                    Serial.println(window_target_position[window]);
+
+                    int duration = (window_target_position[window] - window_position[window]) * settings.window_step_time * 1000;
+                    if (duration <= 0)
+                    {
+                        motors->runMotorFor(window, backward, abs(duration));
+                    }
+                    else
+                    {
+                        motors->runMotorFor(window, forward, abs(duration));
+                    }
+
+                    window_last_target_position[window] = window_target_position[window];
+                }
             }
         }
     }
@@ -354,11 +378,22 @@ void SmartGreenhouse::getSensorData()
     if (NUM_OF_WINDOWS > 0)
         getWindowState();
 
-    getVoltage();
     checkButton();
-    // get BME data
-    temperature = bme.readTemperature();
-    humidity = bme.readHumidity();
+
+    if (millis() - time_last_sensor_read > TIMEOUT_READ_SENSOR)
+    {
+
+        time_last_sensor_read = millis();
+        getVoltage();
+
+        // get BME data
+        temperature = bme.readTemperature();
+        humidity = bme.readHumidity();
+        if (temperature == 0.0 && humidity == 0.0)
+        {
+            error_state = BME_ERROR;
+        }
+    }
 }
 
 /*--------------------------------------------------------------*/
@@ -434,15 +469,17 @@ void SmartGreenhouse::getVoltage()
         // Voltage divider R1 = 10k and R2=1k
         float calib_factor = 11; // (R1 + R1) / R2
         unsigned long raw = analogRead(pin_vcc_solar);
-        solarVoltage = raw * calib_factor / 1024;
+        solarVoltage = raw * (3.3 / 4095);
+        solarVoltage = solarVoltage * calib_factor;
     }
 
     if (BATTERY_MONITOR)
     {
         // Voltage divider R1 10k and R2=1k
-        float calib_factor = 11; // (R1 + R1) / R2
+        float calib_factor = 12.32; // (R1 + R1) / R2
         unsigned long raw = analogRead(pin_vcc_battery);
-        batVoltage = raw * calib_factor / 1024;
+        batVoltage = raw * (3.3 / 4095);
+        batVoltage = batVoltage * calib_factor;
     }
 }
 /*--------------------------------------------------------------*/
@@ -453,13 +490,21 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
     case HEATER:
         if (USE_HEATER)
         {
-            heater_enable = on;
-            if (on)
+            if (error_state == NO_ERROR)
             {
-                digitalWrite(pin_relais1, LOW);
+                heater_enable = on;
+                if (on)
+                {
+                    digitalWrite(pin_relais1, LOW);
+                }
+                else
+                {
+                    digitalWrite(pin_relais1, HIGH);
+                }
             }
             else
             {
+                // ensure not to heat when we have an error
                 digitalWrite(pin_relais1, HIGH);
             }
         }
@@ -529,36 +574,59 @@ void SmartGreenhouse::toggleRelais(int num, bool on)
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::controlMotor()
 {
+    unsigned int now = millis();
     for (int i = 0; i < NUM_OF_WINDOWS; i++)
     {
+        // check for motor zero voltage, but only if they're not turning
+        // if (now - time_motor_current_zero[i] > MOTOR_CURRENT_ZERO_TIMEOUT && !motors->motor_enable[i])
+        // {
+        //     motor_current_zeroVoltage[i] = getMotorCurrentZeroVoltage(i);
+        //     time_motor_current_zero[i] = now;
+        // }
+
         // in case of error, stop motors
-        if (error_state == WINDOW_ENDSTOP_ERROR || error_state == WINDOW_MOVE_ERROR)
+        if (error_state != NO_ERROR)
         {
             motors->stop(i);
         }
         else
         {
+            // home routine, if position is unknown
+            if (window_position[i] == -1)
+            {
+                motors->runMotor(i, backward);
+            }
 
             // check motor endstop closed position
             // when we close window, stop at endstop in any case
-            if (window_target_position[i] <= window_position[i] || window_position[i] == -1 || window_target_position[i] == 0)
+            if (window_target_position[i] < window_position[i] || window_position[i] == -1)
             {
                 if (window_closed[i])
                 {
                     motors->stop(i);
+                    Serial.print("Window endstop CLOSE reached, position: ");
+                    Serial.print(window_position[i]);
+                    Serial.print(", target pos: ");
+                    Serial.println(window_target_position[i]);
                     window_position[i] = 0;
                     window_target_position[i] = 0;
+                    window_last_target_position[i] = 0;
                 }
             }
-
-            // when we open window, stop at endstop in any case
-            if (window_target_position[i] > 0)
+            else
             {
-                if (window_open[i])
+                // when we open window, stop at endstop in any case
+                if (window_target_position[i] > 0 && motors->motor_enable[i])
                 {
-                    motors->stop(i);
-                    window_position[i] = settings.max_window_positions;
-                    window_target_position[i] = settings.max_window_positions;
+                    if (window_open[i])
+                    {
+                        motors->stop(i);
+                        window_position[i] = settings.max_window_positions;
+                        window_target_position[i] = settings.max_window_positions;
+                        window_last_target_position[i] = settings.max_window_positions;
+                        Serial.println("Window endstop MAX OPEN reached");
+                        return;
+                    }
                 }
             }
 
@@ -577,7 +645,33 @@ void SmartGreenhouse::controlMotor()
             {
                 motors->runMotor(i, backward);
             }
+
+            // when target position equals 0 and endstop has been reached, disable motor
+            if (window_target_position[i] == 0 && window_closed[i] == true && motors->motor_enable[i])
+            {
+                motors->stop(i);
+            }
         }
+
+        // check overload condition
+        // if (motors->motor_enable[i])
+        // {
+        //     int motorCurrent = 0;
+        //     if (now - time_last_motor_current[i] > time_interval_motor_current)
+        //     {
+        //         motorCurrent = getMotorCurrent(i);
+        //         time_last_motor_current[i] = now;
+        //         if (motorCurrent > MOTOR_MAX_CURRENT)
+        //         {
+        //             Serial.print("Overload Motor ");
+        //             Serial.print(i);
+        //             Serial.print(": ");
+        //             Serial.println(motorCurrent);
+        //             motors->stop(i);
+        //             error_state = WINDOW_MOVE_ERROR;
+        //         }
+        //     }
+        // }
     }
     motors->loop();
 }
@@ -790,7 +884,7 @@ void SmartGreenhouse::writeLCD()
     }
 }
 
-// /*--------------------------------------------------------------*/
+/*--------------------------------------------------------------*/
 bool SmartGreenhouse::relaisStatus(int num)
 {
 
@@ -808,9 +902,112 @@ bool SmartGreenhouse::relaisStatus(int num)
         return fan_enable;
         break;
 
+    case LIGHT:
+        return light_enable;
+        break;
+
     case OTHERS:
         return others_enable;
         break;
     }
     return false;
+}
+
+/*--------------------------------------------------------------*/
+void SmartGreenhouse::toggleOTHERS()
+{
+    if (USE_OTHERS)
+    {
+        if ((heater_enable && COMBINE_OTHERS_HEATER) ||
+            (fan_enable && COMBINE_OTHERS_FAN) ||
+            (water_pump_enable && COMBINE_OTHERS_WATER) ||
+            (light_enable && COMBINE_OTHERS_LIGHT) ||
+            (motors->motor_enable[0] && COMBINE_OTHERS_MOTORS) ||
+            (motors->motor_enable[1] && COMBINE_OTHERS_MOTORS))
+        {
+            toggleRelais(OTHERS, true);
+        }
+        else
+        {
+            toggleRelais(OTHERS, false);
+        }
+    }
+}
+
+/*--------------------------------------------------------------*/
+int SmartGreenhouse::getMotorCurrent(int motor)
+{
+    int raw_value = 0;
+    int current = 0;
+    float voltage = 0.0;
+    float lastVoltage = 0.0;
+    float voltageDifference = 0.0;
+    float zeroVoltageDivider = 0.0;
+
+    if (motor >= 0 && motor <= NUM_OF_WINDOWS)
+    {
+        lastVoltage = motor_last_voltage[motor];
+        switch (motor)
+        {
+        case 0:
+            raw_value = analogRead(pin_motor1_current);
+            voltage = raw_value * (3.3 / 4095);
+            // read the last voltage we measured and take it into account
+            if (lastVoltage > 0.0)
+            {
+                voltage = (voltage + lastVoltage) / 2;
+            }
+            motor_last_voltage[motor] = voltage;
+            // voltage before voltage divider
+            voltage = voltage * (MOTOR1_R1 + MOTOR1_R2) / MOTOR1_R2;
+            zeroVoltageDivider = motor_current_zeroVoltage[motor] * (MOTOR1_R1 + MOTOR1_R2) / MOTOR1_R2;
+            break;
+
+        case 1:
+            raw_value = analogRead(pin_motor2_current);
+            voltage = raw_value * (3.3 / 4095);
+            // read the last voltage we measured and take it into account
+            if (lastVoltage > 0.0)
+            {
+                voltage = (voltage + lastVoltage) / 2;
+            }
+            motor_last_voltage[motor] = voltage;
+
+            // voltage before voltage divider
+            voltage = voltage * (MOTOR2_R1 + MOTOR2_R2) / MOTOR2_R2;
+            zeroVoltageDivider = motor_current_zeroVoltage[motor] * (MOTOR2_R1 + MOTOR2_R2) / MOTOR2_R2;
+            break;
+        }
+        voltageDifference = abs(voltage - zeroVoltageDivider);
+        current = voltageDifference / 0.185 * 1000; // 185mV/A
+    }
+    return current;
+}
+
+/*--------------------------------------------------------------*/
+float SmartGreenhouse::getMotorCurrentZeroVoltage(int motor)
+{
+    int raw_value = 0;
+
+    float voltage = 0.0;
+    if (motor >= 0 && motor <= NUM_OF_WINDOWS)
+    {
+        switch (motor)
+        {
+        case 0:
+            raw_value = analogRead(pin_motor1_current);
+            voltage = raw_value * (3.3 / 4095);
+            break;
+
+        case 1:
+            raw_value = analogRead(pin_motor2_current);
+            voltage = raw_value * (3.3 / 4095);
+            break;
+        }
+        if (motor_current_zeroVoltage[motor] > 0.0)
+        {
+            voltage = (voltage + motor_current_zeroVoltage[motor] / 2);
+        }
+    }
+    return voltage;
 }
