@@ -9,7 +9,7 @@ the values according to your given environment and usage
 /*---------- MQTT --------------------*/
 #define mqtt_topic "/smartGreenhouse"
 #define mqtt_subscribe_topic "/smartGreenhouseControl"
-#define MQTT_SEND_INTERVAL  5000 // every second;
+#define MQTT_SEND_INTERVAL  60000 // ms;
 /*---------- Power settings ----------*/
 #define SOLAR_POWERED true          // solar powered station? true/false
 #define BATTERY_MONITOR true        // monitor and report battery voltage? true/false
