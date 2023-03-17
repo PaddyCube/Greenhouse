@@ -217,7 +217,7 @@ DIY linear actuator to operate windows
 ![Motor](/pictures/Motor.jpg)
 
 40mm Aluminium square pipe, 30mm Aluminium square pipe, M8 lead scred, some nuts and bolts, endswitch and 24V geared motor. Together with 3D printing
-you'll get your own linear actuator. To be fair, it is cheaper to buy they. But I had all parts laying around.
+you'll get your own linear actuator. To be fair, it is cheaper to buy them. But I had all parts laying around.
 ![Motor](/pictures/motor.png)
 ![Motor](/pictures/motor_detail.png)
 ![Motor](/pictures/motor_schnitt.png)
