@@ -163,28 +163,28 @@ After connect to smartGreenhouse's WIFI AP, you can set the following parameters
 ## MQTT commands
 ### toggle auto / manual state
 To switch to AUTOMATIC mode, use this command
-'''
+```
 {"command":"setMode","parameter":"AUTO"}
-'''
+```
 
 To switch to MANUAL state, use this command
-'''
+```
 {"command":"setMode","parameter":"MANUAL"}
-'''
+```
 
 ### reset error state
 
 
 ### move window
 To move the windows to a given position, use this command. Please note, it only works, if you switch operation mode to MANUAL_TIMEOUT
-'''
+```
 {"command":"WINDOW","parameter":"<your position>"}
-'''
+```
 
 ### toggle outputs
 To toggle any output, use one of the commands below
 
-'''
+```
 {"command":"RELAIS_ON","parameter":"HEATER"}
 {"command":"RELAIS_OFF","parameter":"HEATER"}
 {"command":"RELAIS_ON","parameter":"FAN"}
@@ -195,9 +195,29 @@ To toggle any output, use one of the commands below
 {"command":"RELAIS_OFF","parameter":"OTHERS"}
 {"command":"RELAIS_ON","parameter":"LIGHT"}
 {"command":"RELAIS_OFF","parameter":"LIGHT"}
-'''
+```
 
 # My build
 ## Pictures of PCB and assembled smartGreenhouse
+PCB front and back view
 ![PCB front](/pictures/PCB_front.jpg)
 ![PCB back](/pictures/PCB_back.jpg)
+
+Ugly wiring, you'll do it better
+![Assembly](/pictures/assembly_1.jpg)
+![Assembly](/pictures/assembly_2.jpg)
+
+3D printed case. Left smartGreenhouse control unit. Right solar charger and battery. Below switchable 230V plugs
+![Steuerung](/pictures/Steuerung.jpg)
+
+Node-Red user interface
+![node-red](/pictures/node-red.png)
+
+DIY linear actuator to operate windows
+![Motor](/pictures/Motor.jpg)
+
+40mm Aluminium square pipe, 30mm Aluminium square pipe, M8 lead scred, some nuts and bolts, endswitch and 24V geared motor. Together with 3D printing
+you'll get your own linear actuator. To be fair, it is cheaper to buy they. But I had all parts laying around.
+![Motor](/pictures/motor.png)
+![Motor](/pictures/motor_detail.png)
+![Motor](/pictures/motor_schnitt.png)
