@@ -7,6 +7,7 @@ struct config
     char mqtt_server[40]; // IP address of your MQTT broker
     int mqtt_port = 1883;
     char mqtt_api_token[34];
+    int mqtt_send_interval = 60;
 
     /*---------- Window and vents settings ----------*/
     int max_window_positions = 6; // how many steps/stops should be used between fully closed and fully openend window?

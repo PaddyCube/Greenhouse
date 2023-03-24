@@ -24,7 +24,8 @@ enum relais
 enum error_states
 {
     NO_ERROR,
-    WINDOW_ENDSTOP_ERROR,
+    WINDOW_0_ENDSTOP_ERROR,
+    WINDOW_1_ENDSTOP_ERROR,
     WINDOW_MOVE_ERROR,
     DOOR_ERROR,
     MOTOR_OVERLOAD,
@@ -130,10 +131,10 @@ private:
 
     // common times
     uint32_t mqtt_last_time = 0;
-    uint32_t mqtt_send_interval = MQTT_SEND_INTERVAL;
+    uint32_t mqtt_send_interval = MQTT_MANUAL_SEND_INTERVAL;
     uint32_t time_manual_state = 0;
     uint32_t time_last_sensor_read = 0;
 
-    const char *error_names[6] = {"OK", "ERR_WINDOW_ENDSTOP", "ERR_WINDOW_MOVE", "ERR_DOOR", "ERR_MOTOR_OVERLOAD", "ERR_BME"};
+    const char *error_names[7] = {"OK", "ERR_WINDOW1_ENDSTOP", "ERR_WINDOW2_ENDSTOP", "ERR_WINDOW_MOVE", "ERR_DOOR", "ERR_MOTOR_OVERLOAD", "ERR_BME"};
 };
 #endif

@@ -23,6 +23,7 @@ SmartGreenhouse greenhouse; // global Greenhouse instance
 WiFiManagerParameter custom_mqtt_server("mqttserverID", "MQTT Server", greenhouse.settings.mqtt_server, 40);
 IntParameter custom_mqtt_port("mqttportID", "MQTT Port", greenhouse.settings.mqtt_port);
 WiFiManagerParameter custom_mqtt_api("mqttapiID", "MQTT API Token", greenhouse.settings.mqtt_api_token, 34);
+IntParameter custom_mqtt_interval("mqttinterval", "MQTT send interval", greenhouse.settings.mqtt_send_interval);
 IntParameter custom_window_pos("windowPosID", "Num of window positions", greenhouse.settings.max_window_positions);
 IntParameter custom_window_min("windowMinTempID", "close window if temp below °C", greenhouse.settings.window_min_temp);
 IntParameter custom_window_max("windowMaxTempID", "fully open window if temp above °C", greenhouse.settings.window_max_temp);
@@ -70,6 +71,7 @@ void saveParamCallback()
   strcpy(greenhouse.settings.mqtt_server, custom_mqtt_server.getValue());
   greenhouse.settings.mqtt_port = custom_mqtt_port.getValue();
   strcpy(greenhouse.settings.mqtt_api_token, custom_mqtt_api.getValue());
+  greenhouse.settings.mqtt_send_interval = custom_mqtt_interval.getValue();
 
   greenhouse.settings.max_window_positions = custom_window_pos.getValue();
   greenhouse.settings.window_min_temp = custom_window_min.getValue();
@@ -91,6 +93,7 @@ void saveParamCallback()
   json["mqtt_server"] = greenhouse.settings.mqtt_server;
   json["mqtt_port"] = greenhouse.settings.mqtt_port;
   json["mqtt_api_token"] = greenhouse.settings.mqtt_api_token;
+  json["mqtt_interval"] = greenhouse.settings.mqtt_send_interval;
 
   json["max_window_positions"] = greenhouse.settings.max_window_positions;
   json["window_min_temp"] = greenhouse.settings.window_min_temp;
@@ -154,6 +157,7 @@ void readConfigFile()
           strcpy(greenhouse.settings.mqtt_server, json["mqtt_server"]);
           greenhouse.settings.mqtt_port = json["mqtt_port"];
           strcpy(greenhouse.settings.mqtt_api_token, json["mqtt_api_token"]);
+          greenhouse.settings.mqtt_send_interval = json["mqtt_interval"];
 
           greenhouse.settings.max_window_positions = json["max_window_positions"];
           greenhouse.settings.window_min_temp = json["window_min_temp"];
@@ -186,6 +190,7 @@ void buildMenuParameters()
   custom_mqtt_server.setValue(greenhouse.settings.mqtt_server, 40);
   custom_mqtt_port.setValue(greenhouse.settings.mqtt_port);
   custom_mqtt_api.setValue(greenhouse.settings.mqtt_api_token, 34);
+  custom_mqtt_interval.setValue(greenhouse.settings.mqtt_send_interval);
   custom_window_pos.setValue(greenhouse.settings.max_window_positions);
   custom_window_min.setValue(greenhouse.settings.window_min_temp);
   custom_window_max.setValue(greenhouse.settings.window_max_temp);
@@ -199,6 +204,7 @@ void buildMenuParameters()
   wm.addParameter(&custom_mqtt_server);
   wm.addParameter(&custom_mqtt_port);
   wm.addParameter(&custom_mqtt_api);
+  wm.addParameter(&custom_mqtt_interval);
 
   wm.addParameter(&custom_window_pos);
   wm.addParameter(&custom_window_min);

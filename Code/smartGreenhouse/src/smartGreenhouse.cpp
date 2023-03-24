@@ -89,7 +89,7 @@ void SmartGreenhouse::loop()
     }
 
     // check temperature and operate windows
-    if (operation_state == AUTO && (NUM_OF_WINDOWS > 0 && error_state != WINDOW_ENDSTOP_ERROR && error_state != WINDOW_MOVE_ERROR))
+    if (operation_state == AUTO && (NUM_OF_WINDOWS > 0 && error_state != WINDOW_0_ENDSTOP_ERROR && error_state != WINDOW_1_ENDSTOP_ERROR && error_state != WINDOW_MOVE_ERROR))
     {
         int target_position = -1;
         if (temperature <= settings.window_min_temp)
@@ -166,6 +166,12 @@ void SmartGreenhouse::loop()
     controlMotor();
 
     // send mqtt data
+    if (operation_state == MANUAL)
+    { 
+        if (now - mqtt_last_time >= MQTT_MANUAL_SEND_INTERVAL )
+        mqtt_trigger = true;
+    }
+
     if (now - mqtt_last_time >= mqtt_send_interval || mqtt_trigger == true)
     {
         mqtt_trigger = false;
@@ -435,17 +441,25 @@ void SmartGreenhouse::getWindowState()
 
         if (window_open[0] == true && window_closed[0] == true)
         {
-            error_state = WINDOW_ENDSTOP_ERROR;
+            error_state = WINDOW_0_ENDSTOP_ERROR;
         }
     }
 
     if (NUM_OF_WINDOWS > 1)
     {
-        window_open[1] = digitalRead(pin_window2_open);
-        window_closed[1] = digitalRead(pin_window2_closed);
+        if (WINDOW_ENDSTOPS_NC)
+        {
+            window_open[1] = digitalRead(pin_window2_open);
+            window_closed[1] = digitalRead(pin_window2_closed);
+        }
+        else
+        {
+            window_open[1] = !digitalRead(pin_window2_open);
+            window_closed[1] = !digitalRead(pin_window2_closed);
+        }
         if (window_open[1] == true && window_closed[1] == true)
         {
-            error_state = WINDOW_ENDSTOP_ERROR;
+            error_state = WINDOW_1_ENDSTOP_ERROR;
         }
     }
 
