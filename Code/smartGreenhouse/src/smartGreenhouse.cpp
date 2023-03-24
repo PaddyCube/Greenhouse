@@ -102,9 +102,9 @@ void SmartGreenhouse::loop()
         }
         if (temperature > settings.window_min_temp && temperature < settings.window_max_temp)
         {
-            float steps = (settings.window_max_temp - settings.window_min_temp) /  ( settings.max_window_positions +1 );
+            float steps = (settings.window_max_temp - settings.window_min_temp) /  ( settings.max_window_positions );
             float offset = temperature - settings.window_min_temp;
-            target_position = static_cast<int>(abs(offset / steps));
+            target_position = offset / steps;
         }
 
         for (int i = 0; i < NUM_OF_WINDOWS; i++)
@@ -172,7 +172,7 @@ void SmartGreenhouse::loop()
         mqtt_trigger = true;
     }
 
-    if (now - mqtt_last_time >= mqtt_send_interval || mqtt_trigger == true)
+    if (now - mqtt_last_time >= settings.mqtt_send_interval * 1000 || mqtt_trigger == true)
     {
         mqtt_trigger = false;
         mqtt_last_time = millis();

@@ -131,7 +131,6 @@ private:
 
     // common times
     uint32_t mqtt_last_time = 0;
-    uint32_t mqtt_send_interval = MQTT_MANUAL_SEND_INTERVAL;
     uint32_t time_manual_state = 0;
     uint32_t time_last_sensor_read = 0;
 
