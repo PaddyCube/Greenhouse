@@ -1,6 +1,6 @@
 #include "smartGreenhouse.h"
 #include <PubSubClient.h>
-#include <Adafruit_BME280.h>
+//#include <Adafruit_BME280.h>
 #include <string.h>
 #include <Wire.h>
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
@@ -71,6 +71,10 @@ SmartGreenhouse::SmartGreenhouse()
         time_last_motor_current[i] = 999999999;
         motor_last_voltage[i] = 0.0;
     }
+    endstops_open[0] = new button_debounce(pin_window1_open, WINDOW_ENDSTOPS_NC);
+    endstops_open[1] = new button_debounce(pin_window2_open, WINDOW_ENDSTOPS_NC);
+    endstops_closed[0] = new button_debounce(pin_window1_closed, WINDOW_ENDSTOPS_NC);
+    endstops_closed[1] = new button_debounce(pin_window2_closed, WINDOW_ENDSTOPS_NC);
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::loop()
@@ -102,7 +106,7 @@ void SmartGreenhouse::loop()
         }
         if (temperature > settings.window_min_temp && temperature < settings.window_max_temp)
         {
-            float steps = (settings.window_max_temp - settings.window_min_temp) /  ( settings.max_window_positions );
+            float steps = (settings.window_max_temp - settings.window_min_temp) / (settings.max_window_positions);
             float offset = temperature - settings.window_min_temp;
             target_position = offset / steps;
         }
@@ -167,9 +171,9 @@ void SmartGreenhouse::loop()
 
     // send mqtt data
     if (operation_state == MANUAL)
-    { 
-        if (now - mqtt_last_time >= MQTT_MANUAL_SEND_INTERVAL )
-        mqtt_trigger = true;
+    {
+        if (now - mqtt_last_time >= MQTT_MANUAL_SEND_INTERVAL)
+            mqtt_trigger = true;
     }
 
     if (now - mqtt_last_time >= settings.mqtt_send_interval * 1000 || mqtt_trigger == true)
@@ -182,6 +186,10 @@ void SmartGreenhouse::loop()
 
     mqtt_client.loop();
     toggleOTHERS();
+    endstops_open[0]->loop();
+    endstops_open[1]->loop();
+    endstops_closed[0]->loop();
+    endstops_closed[1]->loop();
 }
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::mqtt_reconnect()
@@ -189,7 +197,7 @@ void SmartGreenhouse::mqtt_reconnect()
     // no reconnect when motor is turning
     if (motors->motor_enable[0] || motors->motor_enable[1])
     {
-        return;
+        //return;
     }
 
     // don't try to reconnect continuously
@@ -426,40 +434,28 @@ void SmartGreenhouse::getDoorState()
 /*--------------------------------------------------------------*/
 void SmartGreenhouse::getWindowState()
 {
-    if (NUM_OF_WINDOWS > 0)
+    for (int i = 0; i < NUM_OF_WINDOWS; i++)
     {
-        if (WINDOW_ENDSTOPS_NC)
-        {
-            window_open[0] = digitalRead(pin_window1_open);
-            window_closed[0] = digitalRead(pin_window1_closed);
-        }
-        else
-        {
-            window_open[0] = !digitalRead(pin_window1_open);
-            window_closed[0] = !digitalRead(pin_window1_closed);
-        }
+        // if (error_state == WINDOW_0_ENDSTOP_ERROR || error_state == WINDOW_1_ENDSTOP_ERROR)
+        // {
+        //     error_state = OK;
+        // }
+        window_open[i] = endstops_open[i]->get_state();
+        window_closed[i] = endstops_closed[i]->get_state();
 
-        if (window_open[0] == true && window_closed[0] == true)
+        if (window_open[i] == true && window_closed[i] == true)
         {
-            error_state = WINDOW_0_ENDSTOP_ERROR;
-        }
-    }
-
-    if (NUM_OF_WINDOWS > 1)
-    {
-        if (WINDOW_ENDSTOPS_NC)
-        {
-            window_open[1] = digitalRead(pin_window2_open);
-            window_closed[1] = digitalRead(pin_window2_closed);
-        }
-        else
-        {
-            window_open[1] = !digitalRead(pin_window2_open);
-            window_closed[1] = !digitalRead(pin_window2_closed);
-        }
-        if (window_open[1] == true && window_closed[1] == true)
-        {
-            error_state = WINDOW_1_ENDSTOP_ERROR;
+            switch (i)
+            {
+            case 0:
+                error_state = WINDOW_0_ENDSTOP_ERROR;
+                mqtt_trigger = true;
+                break;
+            case 1:
+                error_state = WINDOW_1_ENDSTOP_ERROR;
+                mqtt_trigger = true;
+                break;
+            }
         }
     }
 
@@ -618,7 +614,9 @@ void SmartGreenhouse::controlMotor()
                 if (window_closed[i])
                 {
                     motors->stop(i);
-                    Serial.print("Window endstop CLOSE reached, position: ");
+                    Serial.print("Window " );
+                    Serial.print(i);
+                    Serial.print("endstop CLOSE reached, position: ");
                     Serial.print(window_position[i]);
                     Serial.print(", target pos: ");
                     Serial.println(window_target_position[i]);
@@ -638,7 +636,9 @@ void SmartGreenhouse::controlMotor()
                         window_position[i] = settings.max_window_positions;
                         window_target_position[i] = settings.max_window_positions;
                         window_last_target_position[i] = settings.max_window_positions;
-                        Serial.println("Window endstop MAX OPEN reached");
+                        Serial.print("Window ");
+                        Serial.print(i);
+                        Serial.println("endstop MAX OPEN reached");
                         return;
                     }
                 }
@@ -650,7 +650,9 @@ void SmartGreenhouse::controlMotor()
                 if (!motors->motor_enable[i])
                 {
                     window_position[i] = window_target_position[i];
-                    Serial.println("window target pos reached");
+                    Serial.print("Window ");
+                    Serial.print(i);
+                    Serial.println("target pos reached");
                 }
             }
 
@@ -662,6 +664,18 @@ void SmartGreenhouse::controlMotor()
 
             // when target position equals 0 and endstop has been reached, disable motor
             if (window_target_position[i] == 0 && window_closed[i] == true && motors->motor_enable[i])
+            {
+                motors->stop(i);
+            }
+
+            // when target position equals max but no endpoint has been reached, continue running
+            if (window_target_position[i] == settings.max_window_positions && window_open[i] == false && !motors->motor_enable[i])
+            {
+                motors->runMotor(i, forward);
+            }
+
+            // when target position equals 0 and endstop has been reached, disable motor
+            if (window_target_position[i] == settings.max_window_positions && window_open[i] == true && motors->motor_enable[i])
             {
                 motors->stop(i);
             }

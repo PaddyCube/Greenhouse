@@ -11,6 +11,7 @@
 #include "l298n.h"
 #include <LiquidCrystal_I2C.h>
 #include <Button2.h>
+#include "button_debounce.h"
 
 enum relais
 {
@@ -109,6 +110,8 @@ private:
     bool window_closed[NUM_OF_WINDOWS];
     bool door_open = false;
     bool door_closed = false;
+    button_debounce *endstops_open[NUM_OF_WINDOWS];
+    button_debounce *endstops_closed[NUM_OF_WINDOWS];
 
     // actuator states
     bool water_pump_enable = false;
