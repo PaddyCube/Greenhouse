@@ -10,6 +10,9 @@ struct config
     int mqtt_send_interval = 60;
 
     /*---------- Window and vents settings ----------*/
+    bool enableWindows = true;
+    int window_speed = 128; // PWM value of windows
+    int window_new_goal_timeout = 60; // time to wait before accepting new window position
     int max_window_positions = 6; // how many steps/stops should be used between fully closed and fully openend window?
     int window_min_temp = 18;     // if temperature is below this value, windows will be closed in any case (°C)
     int window_max_temp = 26;     // if temperature is above this value, windows will be opnened fully (°C)

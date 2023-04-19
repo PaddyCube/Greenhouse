@@ -53,6 +53,7 @@ public:
     void toggleRelais(int num, bool on);
     void initBME();
     void initLCD();
+    void loadSettings();
 
 private:
     void getSensorData();

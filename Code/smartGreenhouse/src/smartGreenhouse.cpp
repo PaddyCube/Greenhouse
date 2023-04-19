@@ -1,6 +1,6 @@
 #include "smartGreenhouse.h"
 #include <PubSubClient.h>
-//#include <Adafruit_BME280.h>
+// #include <Adafruit_BME280.h>
 #include <string.h>
 #include <Wire.h>
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
@@ -32,7 +32,7 @@ SmartGreenhouse::SmartGreenhouse()
 
     // setup motor
     motors = new L298N(pin_motor_enable, pin_motor1_in1, pin_motor1_in2, pin_motor2_in1, pin_motor2_in2);
-    motors->setSpeed(255);
+    motors->setSpeed(settings.window_speed);
     pinMode(pin_motor1_current, INPUT); // motor 1 current sense
     pinMode(pin_motor2_current, INPUT); // motor 2 current sense
 
@@ -93,27 +93,30 @@ void SmartGreenhouse::loop()
     }
 
     // check temperature and operate windows
-    if (operation_state == AUTO && (NUM_OF_WINDOWS > 0 && error_state != WINDOW_0_ENDSTOP_ERROR && error_state != WINDOW_1_ENDSTOP_ERROR && error_state != WINDOW_MOVE_ERROR))
+    if (settings.enableWindows)
     {
-        int target_position = -1;
-        if (temperature <= settings.window_min_temp)
+        if (operation_state == AUTO && (NUM_OF_WINDOWS > 0 && error_state != WINDOW_0_ENDSTOP_ERROR && error_state != WINDOW_1_ENDSTOP_ERROR && error_state != WINDOW_MOVE_ERROR))
         {
-            target_position = 0;
-        }
-        if (temperature > settings.window_max_temp)
-        {
-            target_position = settings.max_window_positions;
-        }
-        if (temperature > settings.window_min_temp && temperature < settings.window_max_temp)
-        {
-            float steps = (settings.window_max_temp - settings.window_min_temp) / (settings.max_window_positions);
-            float offset = temperature - settings.window_min_temp;
-            target_position = offset / steps;
-        }
+            int target_position = -1;
+            if (temperature <= settings.window_min_temp)
+            {
+                target_position = 0;
+            }
+            if (temperature > settings.window_max_temp)
+            {
+                target_position = settings.max_window_positions;
+            }
+            if (temperature > settings.window_min_temp && temperature < settings.window_max_temp)
+            {
+                float steps = (settings.window_max_temp - settings.window_min_temp) / (settings.max_window_positions);
+                float offset = temperature - settings.window_min_temp;
+                target_position = offset / steps;
+            }
 
-        for (int i = 0; i < NUM_OF_WINDOWS; i++)
-        {
-            moveWindow(i, target_position);
+            for (int i = 0; i < NUM_OF_WINDOWS; i++)
+            {
+                moveWindow(i, target_position);
+            }
         }
     }
 
@@ -197,7 +200,7 @@ void SmartGreenhouse::mqtt_reconnect()
     // no reconnect when motor is turning
     if (motors->motor_enable[0] || motors->motor_enable[1])
     {
-        //return;
+        // return;
     }
 
     // don't try to reconnect continuously
@@ -355,7 +358,7 @@ void SmartGreenhouse::moveWindow(int window, int position)
         if (window_position[window] != -1)
         {
             if (position >= 0 && position <= settings.max_window_positions &&
-                now - window_last_time_new_target[window] > 5000) // only accept new targets if more than 5 sec done since last time
+                now - window_last_time_new_target[window] > settings.window_new_goal_timeout * 1000) // only accept new targets if more than 5 sec done since last time
             {
                 window_target_position[window] = position;
                 window_last_time_new_target[window] = now;
@@ -614,7 +617,7 @@ void SmartGreenhouse::controlMotor()
                 if (window_closed[i])
                 {
                     motors->stop(i);
-                    Serial.print("Window " );
+                    Serial.print("Window ");
                     Serial.print(i);
                     Serial.print("endstop CLOSE reached, position: ");
                     Serial.print(window_position[i]);
@@ -1039,3 +1042,10 @@ float SmartGreenhouse::getMotorCurrentZeroVoltage(int motor)
     }
     return voltage;
 }
+
+/*--------------------------------------------------------------*/
+void SmartGreenhouse::loadSettings()
+{
+    motors->setSpeed(settings.window_speed);
+}
+

@@ -24,6 +24,9 @@ WiFiManagerParameter custom_mqtt_server("mqttserverID", "MQTT Server", greenhous
 IntParameter custom_mqtt_port("mqttportID", "MQTT Port", greenhouse.settings.mqtt_port);
 WiFiManagerParameter custom_mqtt_api("mqttapiID", "MQTT API Token", greenhouse.settings.mqtt_api_token, 34);
 IntParameter custom_mqtt_interval("mqttinterval", "MQTT send interval", greenhouse.settings.mqtt_send_interval);
+IntParameter custom_window_en("windowEnable", "Enable Window control (0/1)", greenhouse.settings.enableWindows);
+IntParameter custom_window_goal("windowGoalID", "Timeout before accepting new goal (s)", greenhouse.settings.window_new_goal_timeout);
+IntParameter custom_window_speed("windowSpeedID", "Window motor speed as PWM value (0-255)", greenhouse.settings.window_speed);
 IntParameter custom_window_pos("windowPosID", "Num of window positions", greenhouse.settings.max_window_positions);
 IntParameter custom_window_min("windowMinTempID", "close window if temp below °C", greenhouse.settings.window_min_temp);
 IntParameter custom_window_max("windowMaxTempID", "fully open window if temp above °C", greenhouse.settings.window_max_temp);
@@ -74,6 +77,16 @@ void saveParamCallback()
   greenhouse.settings.mqtt_send_interval = custom_mqtt_interval.getValue();
 
   greenhouse.settings.max_window_positions = custom_window_pos.getValue();
+  if (custom_window_en.getValue() == 1)
+  {
+    greenhouse.settings.enableWindows = true;
+  }
+  else
+  {
+    greenhouse.settings.enableWindows = true;
+  }
+  greenhouse.settings.window_new_goal_timeout = custom_window_goal.getValue();
+  greenhouse.settings.window_speed = custom_window_speed.getValue();
   greenhouse.settings.window_min_temp = custom_window_min.getValue();
   greenhouse.settings.window_max_temp = custom_window_max.getValue();
   greenhouse.settings.window_step_time = custom_window_steptime.getValue();
@@ -82,6 +95,7 @@ void saveParamCallback()
   greenhouse.settings.heater_max_temp = custom_heater_max.getValue();
   greenhouse.settings.fan_min_humidity = custom_fan.getValue();
   greenhouse.settings.water_pump_timeout = custom_water.getValue();
+  greenhouse.loadSettings();
 
   // build JSON
 #if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
@@ -96,6 +110,9 @@ void saveParamCallback()
   json["mqtt_interval"] = greenhouse.settings.mqtt_send_interval;
 
   json["max_window_positions"] = greenhouse.settings.max_window_positions;
+  json["window_enable"] = greenhouse.settings.enableWindows;
+  json["window_speed"] = greenhouse.settings.window_speed;
+  json["window_goal_timeout"] = greenhouse.settings.window_new_goal_timeout;
   json["window_min_temp"] = greenhouse.settings.window_min_temp;
   json["window_max_temp"] = greenhouse.settings.window_max_temp;
   json["window_step_time"] = greenhouse.settings.window_step_time;
@@ -159,7 +176,10 @@ void readConfigFile()
           strcpy(greenhouse.settings.mqtt_api_token, json["mqtt_api_token"]);
           greenhouse.settings.mqtt_send_interval = json["mqtt_interval"];
 
+          greenhouse.settings.enableWindows = json["window_enable"];
           greenhouse.settings.max_window_positions = json["max_window_positions"];
+          greenhouse.settings.window_new_goal_timeout = json["window_goal_timeout"];
+          greenhouse.settings.window_speed = json["window_speed"];
           greenhouse.settings.window_min_temp = json["window_min_temp"];
           greenhouse.settings.window_max_temp = json["window_max_temp"];
           greenhouse.settings.window_step_time = json["window_step_time"];
@@ -191,7 +211,16 @@ void buildMenuParameters()
   custom_mqtt_port.setValue(greenhouse.settings.mqtt_port);
   custom_mqtt_api.setValue(greenhouse.settings.mqtt_api_token, 34);
   custom_mqtt_interval.setValue(greenhouse.settings.mqtt_send_interval);
+  if (greenhouse.settings.enableWindows)
+  {
+    custom_window_en.setValue(1);
+  }
+  else
+  {
+    custom_window_en.setValue(0);
+  }
   custom_window_pos.setValue(greenhouse.settings.max_window_positions);
+  custom_window_speed.setValue(greenhouse.settings.window_speed);
   custom_window_min.setValue(greenhouse.settings.window_min_temp);
   custom_window_max.setValue(greenhouse.settings.window_max_temp);
   custom_window_steptime.setValue(greenhouse.settings.window_step_time);
@@ -206,6 +235,9 @@ void buildMenuParameters()
   wm.addParameter(&custom_mqtt_api);
   wm.addParameter(&custom_mqtt_interval);
 
+  wm.addParameter(&custom_window_en);
+  wm.addParameter(&custom_window_speed);
+  wm.addParameter(&custom_window_goal);
   wm.addParameter(&custom_window_pos);
   wm.addParameter(&custom_window_min);
   wm.addParameter(&custom_window_max);
