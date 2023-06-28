@@ -135,8 +135,12 @@ private:
 
     // common times
     uint32_t mqtt_last_time = 0;
+    uint32_t lcd_last_time = 0;
     uint32_t time_manual_state = 0;
     uint32_t time_last_sensor_read = 0;
+
+    // last messages
+    char last_msg[20];
 
     const char *error_names[7] = {"OK", "ERR_WINDOW1_ENDSTOP", "ERR_WINDOW2_ENDSTOP", "ERR_WINDOW_MOVE", "ERR_DOOR", "ERR_MOTOR_OVERLOAD", "ERR_BME"};
 };

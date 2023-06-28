@@ -136,7 +136,8 @@ void SmartGreenhouse::loop()
     // check fan
     if (USE_FAN && operation_state == AUTO)
     {
-        if (humidity > settings.fan_min_humidity)
+        // humidity high or temperature too high?
+        if (humidity > settings.fan_min_humidity || (settings.fan_on_max_window == true && temperature > settings.window_max_temp))
         {
             toggleRelais(FAN, true);
         }
@@ -184,7 +185,12 @@ void SmartGreenhouse::loop()
         mqtt_trigger = false;
         mqtt_last_time = millis();
         sendMqttData();
+    }
+
+    if (now - lcd_last_time > 1000)
+    {
         writeLCD();
+        lcd_last_time = millis();
     }
 
     mqtt_client.loop();
@@ -200,7 +206,7 @@ void SmartGreenhouse::mqtt_reconnect()
     // no reconnect when motor is turning
     if (motors->motor_enable[0] || motors->motor_enable[1])
     {
-        // return;
+        return;
     }
 
     // don't try to reconnect continuously
@@ -214,6 +220,7 @@ void SmartGreenhouse::mqtt_reconnect()
             if (reconnect_attemps > 5)
             {
                 Serial.println("failed to connect to MQTT Broker");
+                sprintf(last_msg, "mqtt con. failed   ");
                 return;
             }
 
@@ -229,6 +236,7 @@ void SmartGreenhouse::mqtt_reconnect()
         Serial.println("connected to MQTT Broker");
         Serial.print("subscribing: ");
         Serial.println(mqtt_client.subscribe(mqtt_subscribe_topic));
+        sprintf(last_msg, "mqtt connected     ");
     }
 }
 
@@ -368,6 +376,7 @@ void SmartGreenhouse::moveWindow(int window, int position)
                 {
                     Serial.print("Start moving windows to ");
                     Serial.println(window_target_position[window]);
+                    sprintf(last_msg, "move window to %i", window_target_position[window]);
 
                     int duration = (window_target_position[window] - window_position[window]) * settings.window_step_time * 1000;
                     if (duration <= 0)
@@ -626,6 +635,7 @@ void SmartGreenhouse::controlMotor()
                     window_position[i] = 0;
                     window_target_position[i] = 0;
                     window_last_target_position[i] = 0;
+                    sprintf(last_msg, "w %i CLOSE trig   ", i);
                 }
             }
             else
@@ -642,6 +652,7 @@ void SmartGreenhouse::controlMotor()
                         Serial.print("Window ");
                         Serial.print(i);
                         Serial.println("endstop MAX OPEN reached");
+                        sprintf(last_msg, "w %i OPEN trig   ", i);
                         return;
                     }
                 }
@@ -656,6 +667,7 @@ void SmartGreenhouse::controlMotor()
                     Serial.print("Window ");
                     Serial.print(i);
                     Serial.println("target pos reached");
+                    sprintf(last_msg, "w %i POS reached  ", i);
                 }
             }
 
@@ -712,6 +724,7 @@ void SmartGreenhouse::mqtt_callback(char *topic, byte *payload, unsigned int len
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
+    sprintf(last_msg, "mqtt command recv");
 
     Serial.println();
 #if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
@@ -757,6 +770,7 @@ void SmartGreenhouse::mqtt_callback(char *topic, byte *payload, unsigned int len
         Serial.println(parameter.c_str());
 
         int new_pos = std::stoi(parameter);
+        sprintf(last_msg, "mqtt cmd w %i    ", new_pos);
 
         for (int i = 0; i < NUM_OF_WINDOWS; i++)
         {
@@ -865,7 +879,14 @@ void SmartGreenhouse::writeLCD()
     }
     else
     {
-        lcd->print("A");
+        if (!mqtt_client.connected())
+        {
+            lcd->print("X");
+        }
+        else
+        {
+            lcd->print("A");
+        }
     }
 
     lcd->setCursor(18, 0);
@@ -890,29 +911,45 @@ void SmartGreenhouse::writeLCD()
     if (USE_WATER_PUMP)
     {
         lcd->setCursor(0, 2);
-        sprintf(str, "Water  %i", water_pump_enable);
+        sprintf(str, "W%i", water_pump_enable);
         lcd->print(str);
     }
 
     if (USE_HEATER)
     {
-        lcd->setCursor(10, 2);
-        sprintf(str, "Heater %i", heater_enable);
+        lcd->setCursor(3, 2);
+        sprintf(str, "H%i", heater_enable);
         lcd->print(str);
     }
     if (USE_FAN)
     {
-        lcd->setCursor(0, 3);
-        sprintf(str, "Fan    %i", fan_enable);
+        lcd->setCursor(6, 2);
+        sprintf(str, "F%i", fan_enable);
         lcd->print(str);
     }
 
     if (USE_OTHERS)
     {
-        lcd->setCursor(10, 3);
-        sprintf(str, "Others %i", others_enable);
+        lcd->setCursor(9, 2);
+        sprintf(str, "O%i", others_enable);
         lcd->print(str);
     }
+    lcd->setCursor(14, 2);
+    if (NUM_OF_WINDOWS > 0)
+    {
+        if (NUM_OF_WINDOWS > 1)
+        {
+            sprintf(str, "P%i/%i", window_target_position[0], window_target_position[1]);
+        }
+        else
+        {
+            sprintf(str, "P %i", window_target_position[0]);
+        }
+    }
+    lcd->print(str);
+
+    lcd->setCursor(0, 3);
+    lcd->print(last_msg);
 }
 
 /*--------------------------------------------------------------*/
@@ -1048,4 +1085,3 @@ void SmartGreenhouse::loadSettings()
 {
     motors->setSpeed(settings.window_speed);
 }
-

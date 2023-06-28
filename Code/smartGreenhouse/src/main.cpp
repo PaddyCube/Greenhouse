@@ -34,6 +34,7 @@ IntParameter custom_window_steptime("windowStepTimeID", "time(s)  position", gre
 IntParameter custom_heater_min("heaterMinID", "turn heater on, if temp below °C", greenhouse.settings.heater_min_temp);
 IntParameter custom_heater_max("heaterMaxID", "turn heater off, if temp below °C", greenhouse.settings.heater_max_temp);
 IntParameter custom_fan("fanID", "turn on fan, if humidity above %", greenhouse.settings.fan_min_humidity);
+IntParameter custom_fan_window("fanWindow", "Enable fan, if window is opened fully (0/1)", greenhouse.settings.fan_on_max_window);
 IntParameter custom_water("waterID", "run water pump for (S)", greenhouse.settings.water_pump_timeout);
 IntParameter custom_light("lightiD", "Timeout for light (S)", greenhouse.settings.max_light_on);
 
@@ -94,6 +95,7 @@ void saveParamCallback()
   greenhouse.settings.heater_min_temp = custom_heater_min.getValue();
   greenhouse.settings.heater_max_temp = custom_heater_max.getValue();
   greenhouse.settings.fan_min_humidity = custom_fan.getValue();
+  greenhouse.settings.fan_on_max_window = custom_fan_window.getValue();
   greenhouse.settings.water_pump_timeout = custom_water.getValue();
   greenhouse.loadSettings();
 
@@ -120,6 +122,7 @@ void saveParamCallback()
   json["heater_min_temp"] = greenhouse.settings.heater_min_temp;
   json["heater_max_temp"] = greenhouse.settings.heater_max_temp;
   json["fan_min_humidity"] = greenhouse.settings.fan_min_humidity;
+  json["fan_max_window"] = greenhouse.settings.fan_on_max_window;
   json["water_pump_timeout"] = greenhouse.settings.water_pump_timeout;
 
   File configFile = SPIFFS.open("/config.json", "w");
@@ -187,6 +190,7 @@ void readConfigFile()
           greenhouse.settings.heater_min_temp = json["heater_min_temp"];
           greenhouse.settings.heater_max_temp = json["heater_max_temp"];
           greenhouse.settings.fan_min_humidity = json["fan_min_humidity"];
+          greenhouse.settings.fan_on_max_window = json["fan_max_window"];
           greenhouse.settings.water_pump_timeout = json["water_pump_timeout"];
         }
         else
@@ -227,6 +231,7 @@ void buildMenuParameters()
   custom_heater_min.setValue(greenhouse.settings.heater_min_temp);
   custom_heater_max.setValue(greenhouse.settings.heater_max_temp);
   custom_fan.setValue(greenhouse.settings.fan_min_humidity);
+  custom_fan_window.setValue(greenhouse.settings.fan_on_max_window);
   custom_water.setValue(greenhouse.settings.water_pump_timeout);
   custom_light.setValue(greenhouse.settings.max_light_on);
 
@@ -250,6 +255,7 @@ void buildMenuParameters()
 
 #ifdef USE_FAN
   wm.addParameter(&custom_fan);
+  wm.addParameter(&custom_fan_window);
 #endif
 
 #ifdef USE_WATER_PUMP
@@ -308,6 +314,7 @@ void setup()
   wm.startConfigPortal();
   greenhouse.initBME();
   greenhouse.initLCD();
+  greenhouse.loadSettings();
 
   // Button
   button.begin(pin_light_switch);

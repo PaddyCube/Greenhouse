@@ -25,6 +25,7 @@ struct config
     int heater_min_temp = 5;      // if temp is below this value, turn on heater
     int heater_max_temp = 10;     // if temp is above this value, turn off heater
     int fan_min_humidity = 60;    // if humidity is above this value, start the fan
+    bool fan_on_max_window = true; // if window reaches max pose, turn on fan for additional cooling
     int water_pump_timeout = 600; // let pump run for 10 minutes, before turning off. Pump gets triggered manually
 
     /*----- motor limits --------*/
